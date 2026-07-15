@@ -2750,6 +2750,52 @@ extern "C" {
 				    struct ndpi_tls_block *b,
 				    u_int8_t num_tls_blocks);
 
+  /* *********************** */
+  /* TLS ML Protocol Detection */
+  /* *********************** */
+
+  /**
+   * Load ML model for TLS protocol detection
+   *
+   * @param ndpi_str Detection module
+   * @param model_path Path to ONNX model file
+   * @param model_type Model type (0=CNN, 1=LSTM, 2=Transformer)
+   * @return 0 on success, -1 on error
+   */
+  int ndpi_load_tls_ml_model(struct ndpi_detection_module_struct *ndpi_str,
+                             const char *model_path, int model_type);
+
+  /**
+   * Configure TLS ML detection parameters
+   *
+   * @param ndpi_str Detection module
+   * @param packets_per_flow Number of packets to collect per flow
+   * @param scaler_path Path to normalization scaler JSON
+   * @return 0 on success, -1 on error
+   */
+  int ndpi_configure_tls_ml(struct ndpi_detection_module_struct *ndpi_str,
+                            int packets_per_flow,
+                            const char *scaler_path);
+
+  /**
+   * Get TLS ML prediction for a flow
+   *
+   * @param flow Flow to query
+   * @param protocol_id Output: predicted protocol ID
+   * @param confidence Output: confidence score (0.0-1.0)
+   * @param inference_time_us Output: inference time in microseconds
+   * @return 1 if prediction available, 0 if not yet performed
+   */
+  int ndpi_get_tls_ml_prediction(struct ndpi_flow_struct *flow,
+                                 u_int16_t *protocol_id,
+                                 float *confidence,
+                                 u_int32_t *inference_time_us);
+
+  /**
+   * Initialize TLS ML state for a flow
+   */
+  void ndpi_init_tls_ml_state(struct ndpi_flow_struct *flow);
+
 #ifdef __cplusplus
 }
 #endif

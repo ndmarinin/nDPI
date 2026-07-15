@@ -41,6 +41,10 @@
 /* Used by both nDPI core and patricia code under third-party */
 #include "ndpi_patricia_typedefs.h"
 
+/* TLS ML constants */
+#define NUM_FEATURES_PER_PACKET_FOR_TLS_ML  15  /* Number of features per packet */
+#define MAX_PACKETS_PER_FLOW_FOR_TLS_ML     32  /* Maximum packets to buffer per flow */
+
 #ifndef NDPI_CFFI_PREPROCESSING
 #ifndef u_char
 typedef unsigned char u_char;
@@ -1999,6 +2003,23 @@ struct ndpi_flow_struct {
   /* Flow payload */
   u_int16_t flow_payload_len;
   char *flow_payload;
+
+  /* TLS ML feature extraction state (dynamically allocated) */
+  struct ndpi_flow_ml_state {
+    float *packet_features;   /* [max_packets * NUM_FEATURES_PER_PACKET] */
+    u_int16_t num_packets_collected;
+    u_int16_t max_packets;
+    u_int8_t inference_performed:1;
+    u_int8_t handshake_complete:1;
+    u_int8_t _pad:6;
+    u_int16_t predicted_protocol_id;
+    float confidence_score;
+    u_int32_t inference_time_us;
+    u_int64_t last_packet_time_ms;
+    u_int64_t first_packet_time_ms;
+    u_int32_t last_seq[2];
+    u_int32_t last_ack[2];
+  } ml_state;
 
   /*
      Leave this field below at the end

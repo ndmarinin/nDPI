@@ -3747,6 +3747,9 @@ static void ndpi_search_tls_wrapper(struct ndpi_detection_module_struct *ndpi_st
 	 flow->protos.tls_quic.ssl_version);
 #endif
 
+  /* TLS ML Protocol Detection - Process packet for feature extraction */
+  ndpi_process_tls_ml_packet(ndpi_struct, flow);
+
   /* It is not easy to handle "standard" TLS/DTLS detection and (plain) obfuscated
      heuristic at the SAME time. Use a trivial logic: switch to heuristic
      code only if the standard functions fail */
@@ -3782,6 +3785,27 @@ static void ndpi_search_tls_wrapper(struct ndpi_detection_module_struct *ndpi_st
     tls_obfuscated_heur_search_again(ndpi_struct, flow);
   } else if(rc == 0) {
     NDPI_EXCLUDE_DISSECTOR(ndpi_struct, flow);
+  }
+
+  /* Apply ML prediction if inference was performed */
+  if(ndpi_tls_ml_inference_done(flow)) {
+    u_int16_t predicted_proto;
+    float confidence;
+    u_int32_t inference_time;
+    
+    if(ndpi_get_tls_ml_prediction(flow, &predicted_proto, &confidence, &inference_time) &&
+       confidence >= ndpi_struct->cfg.tls_ml_confidence_threshold) {
+      /* Update flow classification with ML prediction */
+      ndpi_confidence_t conf = NDPI_CONFIDENCE_DPI;
+      if(confidence > 0.9f)
+        conf = NDPI_CONFIDENCE_DPI;
+      else if(confidence > 0.7f)
+        conf = NDPI_CONFIDENCE_DPI_PARTIAL;
+      
+      ndpi_set_detected_protocol(ndpi_struct, flow,
+                                   predicted_proto, NDPI_PROTOCOL_TLS,
+                                   conf);
+    }
   }
 }
 

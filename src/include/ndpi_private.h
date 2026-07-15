@@ -361,10 +361,18 @@ struct ndpi_detection_module_config_struct {
   struct ndpi_bitmask flowrisk_bitmask;
   struct ndpi_bitmask flowrisk_info_bitmask;
 
-  int flow_risk_lists_enabled;
-  int risk_anonymous_subscriber_list_icloudprivaterelay_enabled;
-  int risk_anonymous_subscriber_list_tor_exit_nodes_enabled;
-  int risk_crawler_bot_list_enabled;
+int flow_risk_lists_enabled;
+   int risk_anonymous_subscriber_list_icloudprivaterelay_enabled;
+   int risk_anonymous_subscriber_list_tor_exit_nodes_enabled;
+   int risk_crawler_bot_list_enabled;
+
+   /* TLS ML Protocol Detection */
+   int tls_ml_enabled;               /* Enable ML-based TLS protocol classification */
+   int tls_ml_model_type;            /* 0=CNN, 1=LSTM, 2=Transformer */
+   int tls_ml_packets_per_flow;        /* Number of packets to collect per flow */
+   int tls_ml_confidence_threshold;    /* Minimum confidence for valid prediction */
+   char tls_ml_model_path[256];      /* Path to ONNX model file */
+   char tls_ml_scaler_path[256];     /* Path to normalization scaler JSON */
 };
 
 struct ndpi_detection_module_struct {
@@ -752,7 +760,16 @@ ndpi_protocol_breed_t get_proto_breed(struct ndpi_detection_module_struct *ndpi_
 ndpi_protocol_category_t get_proto_category(struct ndpi_detection_module_struct *ndpi_str,
                                             ndpi_master_app_protocol proto);
 
-  /* TLS */
+  /* TLS ML */
+int ndpi_tls_ml_inference_done(const struct ndpi_flow_struct *flow);
+int ndpi_get_tls_ml_prediction(struct ndpi_flow_struct *flow,
+                                u_int16_t *protocol_id,
+                                float *confidence,
+                                u_int32_t *inference_time_us);
+void ndpi_process_tls_ml_packet(struct ndpi_detection_module_struct *ndpi_struct,
+                                struct ndpi_flow_struct *flow);
+
+/* TLS */
 int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,
                              struct ndpi_flow_struct *flow, uint32_t quic_version);
 void processCertificateElements(struct ndpi_detection_module_struct *ndpi_struct,
