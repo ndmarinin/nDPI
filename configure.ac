@@ -388,6 +388,27 @@ AS_IF([test "x${enable_shared}" = "xno"],[
 
 ADDITIONAL_INCS="${ADDITIONAL_INCS}"
 ADDITIONAL_LIBS="${ADDITIONAL_LIBS}"
+
+
+dnl> ONNX Runtime for TLS ML detection
+AC_ARG_ENABLE(tls-ml,
+  AS_HELP_STRING([--enable-tls-ml], [Enable TLS ML detection with ONNX Runtime]),
+  [enable_tls_ml=$enableval],
+  [enable_tls_ml=yes]
+)
+AS_IF([test "x$enable_tls_ml" != "xno"], [
+  AC_MSG_CHECKING([for ONNX Runtime])
+  AS_IF([pkg-config --exists libonnxruntime], [
+    ONNXRUNTIME_CFLAGS=$(pkg-config --cflags libonnxruntime)
+    ONNXRUNTIME_LIBS=$(pkg-config --libs libonnxruntime)
+    ADDITIONAL_INCS="${ADDITIONAL_INCS} ${ONNXRUNTIME_CFLAGS}"
+    ADDITIONAL_LIBS="${ADDITIONAL_LIBS} ${ONNXRUNTIME_LIBS}"
+    AC_DEFINE([HAVE_ONNX_RUNTIME], [1], [Define if ONNX Runtime is available])
+    AC_MSG_RESULT([yes])
+  ], [
+    AC_MSG_RESULT([no (libonnxruntime not found via pkg-config)])
+  ])
+])
 PCAP_HOME=$HOME/PF_RING/userland
 
 DPDK_TARGET=

@@ -1,0 +1,151 @@
+# nDPI TLS ML - Инструкция по запуску
+
+## Обзор
+
+nDPI с поддержкой ML для классификации TLS-based протоколов использует ONNX Runtime для инференса нейросетевой модели. Модель классифицирует TLS-трафик на 5 классов: DoT, HTTPS, IMAPS, LDAPS, MQTTS.
+
+## Что было реализовано
+
+### 1. Корректная интеграция ONNX Runtime (`ndpi_tls_ml.c`)
+- **Реализованы функции**: `ndpi_load_tls_ml_model()`, `ndpi_load_tls_ml_classes()`, `ndpi_configure_tls_ml()`
+- **Исправлен ONNX API**: используется правильный C API через `OrtGetApiBase()->GetApi(ORT_API_VERSION)` вместо несуществующих прямых функций
+- **Загрузка классов из файла**: классы загружаются из `tls_classifier_classes.txt` и маппятся на ID протоколов nDPI
+- **Управление памятью**: добавлена функция `ndpi_free_tls_ml_state()` для освобождения памяти flow
+
+### 2. Интеграция в систему сборки (`configure.ac`)
+- Добавлена опция `--enable-tls-ml` для включения ONNX Runtime
+- Автоматическое обнаружение через `pkg-config --exists libonnxruntime`
+- Линковка `-lonnxruntime` и include paths
+
+### 3. Опции ndpiReader (`example/ndpiReader.c`)
+- `--tls-ml-model <path>` — путь к ONNX-модели
+- `--tls-ml-classes <path>` — путь к файлу классов
+- `--tls-ml-packets <n>` — количество пакетов для сбора перед инференсом (по умолчанию 10)
+
+### 4. Освобождение памяти
+- Добавлен вызов `ndpi_free_tls_ml_state()` в `ndpi_free_flow_data()` для предотвращения утечек памяти
+
+## Сборка
+
+```bash
+cd /home/nikita/nDPI
+autoreconf -fi
+./configure --enable-tls-ml
+make -j$(nproc)
+```
+
+Проверка, что ONNX Runtime подключён:
+```bash
+./configure --enable-tls-ml 2>&1 | grep "Additional libs"
+# Должно быть: Additional libs: -lonnxruntime -lm -ldl
+```
+
+## Запуск
+
+### Способ 1: Скрипт run_tls_ml.sh
+
+```bash
+cd /home/nikita/nDPI
+./run_tls_ml.sh <pcap_file> [packets_per_flow]
+
+# Пример:
+./run_tls_ml.sh tests/pcap/netflix.pcap 10
+```
+
+### Способ 2: Прямой запуск ndpiReader
+
+```bash
+/home/nikita/nDPI/example/ndpiReader \
+    --tls-ml-model /home/nikita/tls_trained_models/cnn_model/exported/tls_classifier.onnx \
+    --tls-ml-classes /home/nikita/tls_trained_models/cnn_model/exported/tls_classifier_classes.txt \
+    --tls-ml-packets 10 \
+    -v 2 \
+    -i <pcap_file>
+```
+
+### Параметры
+
+| Параметр | Описание | Значение по умолчанию |
+|----------|----------|----------------------|
+| `--tls-ml-model` | Путь к ONNX-модели | Обязательный |
+| `--tls-ml-classes` | Путь к файлу классов | Обязательный |
+| `--tls-ml-packets` | Пакетов на flow для инференса | 10 |
+| `-v 2` | Уровень verbose (0-3) | 0 |
+| `-i <file>` | Входной pcap файл | Обязательный |
+
+## Модели
+
+```
+MODEL_PATH = "/home/nikita/tls_trained_models/cnn_model/exported/tls_classifier.onnx"
+CLASSES_PATH = "/home/nikita/tls_trained_models/cnn_model/exported/tls_classifier_classes.txt"
+```
+
+### Классы модели
+
+Файл `tls_classifier_classes.txt` содержит 5 классов (по одному на строку):
+```
+DoT
+HTTPS
+IMAPS
+LDAPS
+MQTTS
+```
+
+### Маппинг классов на протоколы nDPI
+
+| Класс | nDPI Protocol ID | Описание |
+|-------|-----------------|----------|
+| DoT | 196 (NDPI_PROTOCOL_DOH_DOT) | DNS over TLS |
+| HTTPS | 91 (NDPI_PROTOCOL_TLS) | HTTPS/TLS |
+| IMAPS | 51 (NDPI_PROTOCOL_MAIL_IMAPS) | IMAP over SSL |
+| LDAPS | 112 (NDPI_PROTOCOL_LDAP) | LDAP over SSL |
+| MQTTS | 222 (NDPI_PROTOCOL_MQTT) | MQTT over TLS |
+
+## Как это работает
+
+1. **Загрузка модели**: При запуске ndpiReader загружает ONNX-модель и файл классов
+2. **Извлечение признаков**: Для каждого TLS-потока извлекаются 19 признаков на пакет
+3. **Сбор пакетов**: Признаки собираются для N пакетов (по умолчанию 10)
+4. **Инференс**: Когда собрано достаточно пакетов, запускается ML-инференс
+5. **Классификация**: Результат инференса (argmax + softmax) определяет протокол
+6. **Применение**: Если confidence >= порога, классификация потока обновляется
+
+### Признаки (19 на пакет)
+
+1. Direction (0=client→server, 1=server→client)
+2. Packet length
+3. Payload length
+4. IP total length
+5. TTL
+6. Relative timestamp
+7. Inter-arrival time
+8. TCP window size
+9. TCP header length
+10. TCP flags
+11. TCP sequence delta
+12. TCP ACK delta
+13. TLS record type
+14. TLS record length
+15. TLS version
+16-19. Reserved (handshake type, cipher len, ext len, cert len)
+
+## Известные предупреждения
+
+При запуске могут появляться предупреждения ONNX Runtime:
+```
+Schema error: Trying to register schema with name Abs...
+```
+Это известная проблема onnxruntime 1.21 и не влияет на работу. Предупреждения выводятся в stderr и отфильтровываются в скрипте.
+
+## Файлы
+
+| Файл | Описание |
+|------|----------|
+| `src/lib/ndpi_tls_ml.c` | ML-модуль TLS (ONNX инференс) |
+| `src/include/ndpi_api.h` | API объявления |
+| `src/include/ndpi_private.h` | Внутренние объявления |
+| `src/lib/ndpi_main.c` | Интеграция освобождения памяти |
+| `src/lib/protocols/tls.c` | Вызов ML из TLS-диссектора |
+| `example/ndpiReader.c` | CLI-опции и загрузка модели |
+| `configure.ac` | Сборка с ONNX Runtime |
+| `run_tls_ml.sh` | Скрипт запуска |

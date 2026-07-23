@@ -2766,11 +2766,21 @@ extern "C" {
                              const char *model_path, int model_type);
 
   /**
+   * Load class labels for TLS ML model
+   *
+   * @param ndpi_str Detection module
+   * @param classes_path Path to classes text file (one class per line)
+   * @return 0 on success, -1 on error
+   */
+  int ndpi_load_tls_ml_classes(struct ndpi_detection_module_struct *ndpi_str,
+                               const char *classes_path);
+
+  /**
    * Configure TLS ML detection parameters
    *
    * @param ndpi_str Detection module
    * @param packets_per_flow Number of packets to collect per flow
-   * @param scaler_path Path to normalization scaler JSON
+   * @param scaler_path Path to normalization scaler JSON (unused, kept for API compat)
    * @return 0 on success, -1 on error
    */
   int ndpi_configure_tls_ml(struct ndpi_detection_module_struct *ndpi_str,

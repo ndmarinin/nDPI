@@ -3793,18 +3793,27 @@ static void ndpi_search_tls_wrapper(struct ndpi_detection_module_struct *ndpi_st
     float confidence;
     u_int32_t inference_time;
     
-    if(ndpi_get_tls_ml_prediction(flow, &predicted_proto, &confidence, &inference_time) &&
-       confidence >= ndpi_struct->cfg.tls_ml_confidence_threshold) {
-      /* Update flow classification with ML prediction */
-      ndpi_confidence_t conf = NDPI_CONFIDENCE_DPI;
-      if(confidence > 0.9f)
-        conf = NDPI_CONFIDENCE_DPI;
-      else if(confidence > 0.7f)
-        conf = NDPI_CONFIDENCE_DPI_PARTIAL;
+    if(ndpi_get_tls_ml_prediction(flow, &predicted_proto, &confidence, &inference_time)) {
+      float threshold = (float)ndpi_struct->cfg.tls_ml_confidence_threshold / 100.0f;
+      if(threshold <= 0.0f) threshold = 0.5f; /* Default 0.5 */
       
-      ndpi_set_detected_protocol(ndpi_struct, flow,
-                                   predicted_proto, NDPI_PROTOCOL_TLS,
-                                   conf);
+      printf("TLS ML: inference done - predicted_proto=%u confidence=%.4f threshold=%.4f time=%uus\n",
+             predicted_proto, confidence, threshold, inference_time);
+      
+      if(confidence >= threshold) {
+        ndpi_confidence_t conf = NDPI_CONFIDENCE_DPI;
+        if(confidence > 0.9f)
+          conf = NDPI_CONFIDENCE_DPI;
+        else if(confidence > 0.7f)
+          conf = NDPI_CONFIDENCE_DPI_PARTIAL;
+        
+        printf("TLS ML: applying prediction proto=%u confidence=%.4f\n", predicted_proto, confidence);
+        ndpi_set_detected_protocol(ndpi_struct, flow,
+                                     predicted_proto, NDPI_PROTOCOL_TLS,
+                                     conf);
+      } else {
+        printf("TLS ML: confidence %.4f < threshold %.4f, not applying\n", confidence, threshold);
+      }
     }
   }
 }

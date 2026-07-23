@@ -85,6 +85,9 @@ static char *_protoFilePath         = NULL; /**< Protocol file path */
 static char *_customCategoryFilePath= NULL; /**< Custom categories file path  */
 static char *_maliciousJA4Path      = NULL; /**< Malicious JA4 signatures */
 static char *_maliciousSHA1Path     = NULL; /**< Malicious SSL certificate SHA1 fingerprints */
+static char *_tlsMlModelPath     = NULL; /**< TLS ML ONNX model path */
+static char *_tlsMlClassesPath   = NULL; /**< TLS ML classes file path */
+static int   _tlsMlPacketsPerFlow = 10;   /**< TLS ML packets per flow */
 static char *_riskyDomainFilePath   = NULL; /**< Risky domain files */
 static char *_domain_suffixes       = NULL; /**< Domain suffixes file */
 static char *_categoriesDirPath     = NULL; /**< Directory containing domain files */
@@ -592,6 +595,21 @@ static void configure_ndpi(struct ndpi_detection_module_struct *ndpi_struct) {
   if(enable_doh_dot_detection)
     ndpi_set_config(ndpi_struct, "tls", "application_blocks_tracking", "enable");
 
+  /* TLS ML Model Loading */
+  if(_tlsMlModelPath != NULL) {
+    if(ndpi_load_tls_ml_model(ndpi_struct, _tlsMlModelPath, 0) == 0) {
+      printf("TLS ML model loaded: %s\n", _tlsMlModelPath);
+      if(_tlsMlClassesPath != NULL) {
+        if(ndpi_load_tls_ml_classes(ndpi_struct, _tlsMlClassesPath) != 0) {
+          fprintf(stderr, "Error loading TLS ML classes: %s\n", _tlsMlClassesPath);
+        }
+      }
+      ndpi_configure_tls_ml(ndpi_struct, _tlsMlPacketsPerFlow, NULL);
+    } else {
+      fprintf(stderr, "Error loading TLS ML model: %s\n", _tlsMlModelPath);
+    }
+  }
+
   if(addr_dump_path != NULL)
     ndpi_cache_address_restore(ndpi_struct, addr_dump_path, 0);
 
@@ -1070,10 +1088,11 @@ static void help(u_int long_help) {
 #define OPTLONG_VALUE_FPC_STATS                 3004
 #define OPTLONG_VALUE_DOMAINS_FILE              3005
 #define OPTLONG_VALUE_RUN_TESTS                 3006
+#define OPTLONG_VALUE_TLS_ML_MODEL              3007
+#define OPTLONG_VALUE_TLS_ML_CLASSES            3008
+#define OPTLONG_VALUE_TLS_ML_PACKETS            3009
 
 static struct option longopts[] = {
-  /* mandatory extcap options */
-  { "extcap-interfaces", no_argument, NULL, '0'},
   { "extcap-version", optional_argument, NULL, '1'},
   { "extcap-dlts", no_argument, NULL, '2'},
   { "extcap-interface", required_argument, NULL, '3'},
@@ -1126,6 +1145,9 @@ static struct option longopts[] = {
 
   { "x-file", required_argument, NULL, OPTLONG_VALUE_DOMAINS_FILE},
   { "run-tests", no_argument, NULL, OPTLONG_VALUE_RUN_TESTS},
+  { "tls-ml-model", required_argument, NULL, OPTLONG_VALUE_TLS_ML_MODEL},
+  { "tls-ml-classes", required_argument, NULL, OPTLONG_VALUE_TLS_ML_CLASSES},
+  { "tls-ml-packets", required_argument, NULL, OPTLONG_VALUE_TLS_ML_PACKETS},
 
   {0, 0, 0, 0}
 };
@@ -1818,6 +1840,18 @@ static void parse_parameters(int argc, char **argv)
 
     case OPTLONG_VALUE_RUN_TESTS:
       skip_unit_tests = 0;
+      break;
+
+    case OPTLONG_VALUE_TLS_ML_MODEL:
+      _tlsMlModelPath = optarg;
+      break;
+
+    case OPTLONG_VALUE_TLS_ML_CLASSES:
+      _tlsMlClassesPath = optarg;
+      break;
+
+    case OPTLONG_VALUE_TLS_ML_PACKETS:
+      _tlsMlPacketsPerFlow = atoi(optarg);
       break;
 
     case 'X':

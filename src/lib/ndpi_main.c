@@ -8173,6 +8173,9 @@ void ndpi_free_flow_data(struct ndpi_flow_struct* flow) {
 
     if(flow->tls_quic.obfuscated_heur_state)
       ndpi_free(flow->tls_quic.obfuscated_heur_state);
+
+    /* TLS ML state */
+    ndpi_free_tls_ml_state(flow);
   }
 }
 
@@ -10585,6 +10588,11 @@ static void ndpi_internal_detection_process_packet(struct ndpi_detection_module_
   }
 
   ndpi_str->current_ts = current_time_ms;
+
+  /* TLS ML: process packet for feature extraction (called for every packet) */
+  if(ndpi_str->cfg.tls_ml_enabled && !flow->ml_state.inference_performed) {
+    ndpi_process_tls_ml_packet(ndpi_str, flow);
+  }
 
   if(flow->extra_packets_func) {
     process_extra_packet(ndpi_str, flow);

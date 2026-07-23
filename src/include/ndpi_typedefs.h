@@ -42,7 +42,7 @@
 #include "ndpi_patricia_typedefs.h"
 
 /* TLS ML constants */
-#define NUM_FEATURES_PER_PACKET_FOR_TLS_ML  15  /* Number of features per packet */
+#define NUM_FEATURES_PER_PACKET_FOR_TLS_ML  19  /* Number of features per packet */
 #define MAX_PACKETS_PER_FLOW_FOR_TLS_ML     32  /* Maximum packets to buffer per flow */
 
 #ifndef NDPI_CFFI_PREPROCESSING
